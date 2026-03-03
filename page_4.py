@@ -6,80 +6,72 @@ import plotly.express as px
 st.set_page_config(page_title="Verweildaueranalyse Kombiniert", layout="wide")
 st.title("Verweildaueranalyse: Vergleich der Zonen")
 
-@st.cache_data
-def load_and_clean_data(file_path):
+# --- FUNKTION ZUR DATENAUFBEREITUNG (um Code-Duplikate zu vermeiden) ---
+def prepare_data(file_path, color_hex, title_label):
     try:
         df = pd.read_csv(file_path, sep=';')
-        # Bereinigung: " Tage" entfernen und zu numerisch konvertieren
+        
+        # Numerische Konvertierung & Bereinigung
         df['Verweildauer'] = pd.to_numeric(
             df['Verweildauer'].astype(str).str.replace(' Tage', '', case=False).str.strip(), 
             errors='coerce'
         )
-        return df.dropna(subset=['Verweildauer'])
-    except FileNotFoundError:
+        df = df.dropna(subset=['Verweildauer'])
+        df = df[df['Verweildauer'] >= 0] # Nur positive Werte
+
+        # Gruppierung in 7-Tage-Wochen
+        df['Woche_Start'] = (df['Verweildauer'] // 7).astype(int)
+        
+        # Aggregation
+        df_counts = df.groupby('Woche_Start').size().reset_index(name='Anzahl')
+        df_counts = df_counts.sort_values('Woche_Start')
+        
+        # Label erstellen (z.B. "Woche 2 (14-20 Tage)")
+        df_counts['Woche_Label'] = df_counts['Woche_Start'].apply(
+            lambda x: f"Woche {x} ({x*7}-{x*7+6} d)"
+        )
+        
+        # Diagramm erstellen
+        fig = px.bar(
+            df_counts, 
+            x="Woche_Label", 
+            y="Anzahl",
+            title=f"Verweildauer {title_label} - Nur belegte Zeiträume",
+            color_discrete_sequence=[color_hex],
+            template="plotly_white",
+            text_auto=True
+        )
+
+        fig.update_layout(
+            xaxis_title="Zeitintervalle (Wochen)",
+            yaxis_title="Anzahl der Einträge",
+            xaxis={'type': 'category'},
+            bargap=0.2
+        )
+        
+        return fig
+    except Exception as e:
+        st.error(f"Fehler beim Laden von {file_path}: {e}")
         return None
 
-# --- Funktion zur Diagrammerstellung ---
-def create_histogram(df, title, color):
-    fig = px.histogram(
-        df, 
-        x="Verweildauer", 
-        title=title,
-        labels={'Verweildauer': 'Tage'},
-        color_discrete_sequence=[color]
-    )
-    
-    fig.update_traces(
-        xbins=dict(start=0, end=df['Verweildauer'].max(), size=7),
-        marker_line_width=1,
-        marker_line_color="white"
-    )
-    
-    fig.update_layout(
-        bargap=0.1,
-        xaxis=dict(title="Wochen (7-Tage Intervalle)", tick0=0, dtick=7),
-        yaxis_title="Anzahl der Einträge",
-        template="plotly_white",
-        height=500
-    )
-    return fig
-
-# --- Daten laden ---
-df_zone_02 = load_and_clean_data('Verweildauer 02 ohne Mandant ohne WE_STRAT 01 neu_202602270919.csv')
-df_zone_blnm = load_and_clean_data('Verweildauer Zone BLNM_202602200934.csv')
-
-# --- Anzeige Diagramm 1 (Zone 02) ---
-st.header("Analyse Zone 02")
-if df_zone_02 is not None:
-    fig1 = create_histogram(df_zone_02, "Verweildauer in Wochen (Zone 02)", '#3498db')
+# --- ZONE 02 (OBEN) ---
+st.header("Zone 02")
+fig1 = prepare_data(
+    'Verweildauer 020 ohne Eingrenzung des WE_DATUM_ohne AS_202603031623.csv', 
+    '#3498db', 
+    "Zone 02"
+)
+if fig1:
     st.plotly_chart(fig1, use_container_width=True)
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Durchschnitt", f"{df_zone_02['Verweildauer'].mean():.1f} Tage")
-    c2.metric("Median", f"{df_zone_02['Verweildauer'].median():.1f} Tage")
-    c3.metric("Max", f"{df_zone_02['Verweildauer'].max():.0f} Tage")
-    
-    # NEU: Expander für Rohdaten Zone 02
-    with st.expander("Rohdaten Zone 02 anzeigen"):
-        st.dataframe(df_zone_02, use_container_width=True)
-else:
-    st.error("Datei für Zone 02 nicht gefunden.")
 
 st.markdown("---") # Trennlinie
 
-# --- Anzeige Diagramm 2 (BLNM) ---
-st.header("Analyse Zone BLNM")
-if df_zone_blnm is not None:
-    fig2 = create_histogram(df_zone_blnm, "Verweildauer in Wochen (BLNM)", '#2ecc71')
+# --- ZONE BLNM (UNTEN) ---
+st.header("Zone BLNM")
+fig2 = prepare_data(
+    'Verweildauer BLNM ohne Eingrenzung des WE_DATUM_ohne AS_202603031629.csv', 
+    '#2ecc71', 
+    "Zone BLNM"
+)
+if fig2:
     st.plotly_chart(fig2, use_container_width=True)
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Durchschnitt", f"{df_zone_blnm['Verweildauer'].mean():.1f} Tage")
-    c2.metric("Median", f"{df_zone_blnm['Verweildauer'].median():.1f} Tage")
-    c3.metric("Max", f"{df_zone_blnm['Verweildauer'].max():.0f} Tage")
-    
-    # NEU: Expander für Rohdaten Zone BLNM
-    with st.expander("Rohdaten Zone BLNM anzeigen"):
-        st.dataframe(df_zone_blnm, use_container_width=True)
-else:
-    st.error("Datei für BLNM nicht gefunden.")
