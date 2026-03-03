@@ -1,6 +1,6 @@
 import streamlit as st
 
-main_page = st.Page("page_1.py", title="Seite 1")
+main_page = st.Page("page_1.py", title="Startseite")
 page_2 = st.Page("page_2.py", title="ABC-Analyse")
 page_3 = st.Page("page_3.py", title="Zonenpenetrationsanalyse")
 page_4 = st.Page("page_4.py", title="Verweildaueranalyse")
